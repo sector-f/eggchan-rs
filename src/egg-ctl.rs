@@ -1,3 +1,8 @@
+#[macro_use] extern crate prettytable;
+use prettytable::Table;
+use prettytable::row::Row;
+use prettytable::cell::Cell;
+
 extern crate chrono;
 
 extern crate clap;
@@ -66,11 +71,13 @@ fn main() {
         ("list-boards", _) => {
             match boards::table.select(boards::all_columns).get_results::<models::Board>(&conn) {
                 Ok(boards) => {
-                    println!("ID Name Description");
+                    let mut table = Table::new();
+                    table.add_row(row!["ID", "Name", "Description"]);
                     for board in boards {
                         let desc = if let Some(d) = board.description { d.to_string() } else { "".to_string() };
-                        println!("{} {} {}", board.id, board.name, desc);
+                        table.add_row(row![board.id.to_string(), board.name.to_string(), desc]);
                     }
+                    table.printstd();
                 },
                 Err(e) => {
                     eprintln!("Error: {}", e);
