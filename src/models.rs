@@ -3,16 +3,16 @@ use schema::*;
 
 #[derive(Queryable, Insertable)]
 pub struct Board {
-    id: i32,
-    name: String,
-    description: Option<String>,
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
 }
 
 #[derive(Queryable, Insertable)]
 pub struct Image {
-    id: i32,
-    filepath: String,
-    thumbpath: String,
+    pub id: i32,
+    pub filepath: String,
+    pub thumbpath: String,
 }
 
 #[derive(Queryable)]
