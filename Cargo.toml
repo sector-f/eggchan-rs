@@ -12,8 +12,6 @@ name = "egg-ctl"
 path = "src/egg-ctl.rs"
 
 [dependencies]
-actix = "0.5.7"
-actix-web = "0.6.10"
 diesel = { version = "1.3.0", features = ["postgres", "chrono"] }
 r2d2 = "0.8.2"
 r2d2-diesel = "1.0.0"
@@ -26,3 +24,7 @@ futures = "0.1.21"
 clap = "2.31.2"
 dotenv = "0.13.0"
 prettytable-rs = "0.7.0"
+
+rocket = "0.3.14"
+rocket_codegen = "0.3.14"
+rocket_contrib = "0.3.14"

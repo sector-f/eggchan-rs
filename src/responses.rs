@@ -9,13 +9,13 @@ pub struct BoardResponse {
 
 #[derive(Queryable, Serialize)]
 pub struct PostResponse {
-    post_num: i32,
+    post_num: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reply_to: Option<i32>,
     // #[serde(skip_serializing_if = "Option::is_none")]
     // image: Option<String>,
-    time: DateTime<Utc>,
-    comment: String,
+    time: Option<DateTime<Utc>>,
+    comment: Option<String>,
 }
 
 #[derive(Queryable, Serialize)]

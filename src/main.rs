@@ -1,16 +1,21 @@
-extern crate actix;
-use actix::prelude::*;
+#![feature(plugin)]
+#![plugin(rocket_codegen)]
 
-extern crate actix_web;
-use actix_web::{http, middleware, server, App, AsyncResponder, HttpRequest, HttpResponse, Responder, FromRequest, Path};
+extern crate rocket;
+use rocket::request::{self, FromRequest};
+use rocket::{Request, State, Outcome};
+use rocket::http::Status;
+
+extern crate rocket_contrib;
+use rocket_contrib::Json;
 
 #[macro_use] extern crate diesel;
-// use diesel::prelude::*;
+use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel::result::Error as DieselError;
 
 extern crate r2d2;
-use r2d2::Pool;
+use r2d2::{Pool, PooledConnection};
 extern crate r2d2_diesel;
 use r2d2_diesel::ConnectionManager;
 
@@ -32,84 +37,174 @@ use futures::future::Future;
 // use std::path::PathBuf;
 use std::process::exit;
 
-pub mod db;
-use db::*;
+use std::ops::Deref;
+
+// pub mod db;
+// use db::*;
 pub mod models;
 pub mod responses;
-pub mod messages;
-use messages::*;
+use responses::*;
+// pub mod messages;
+// use messages::*;
 pub mod schema;
 
-pub struct State {
-    db: Addr<Syn, DbExecutor>,
+type PgPool = Pool<ConnectionManager<PgConnection>>;
+
+pub struct DbConn(pub PooledConnection<ConnectionManager<PgConnection>>);
+
+impl<'a, 'r> FromRequest<'a, 'r> for DbConn {
+    type Error = ();
+
+    fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
+        let pool = request.guard::<State<PgPool>>()?;
+        match pool.get() {
+            Ok(conn) => Outcome::Success(DbConn(conn)),
+            Err(_) => Outcome::Failure((Status::ServiceUnavailable, ()))
+        }
+    }
 }
 
-fn make_post(req: HttpRequest<State>) -> impl Responder {
-    // req.state()
-    //     .db
-    //     .send(CreateUser {
-    //         name: name.to_owned(),
-    //     })
-    //     .from_err()
-    //     .and_then(|res| match res {
-    //         Ok(user) => Ok(HttpResponse::Ok().json(user)),
-    //         Err(_) => Ok(HttpResponse::InternalServerError().into()),
-    //     })
-    // .responder()
-    "unimplemented"
+impl Deref for DbConn {
+    type Target = PgConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-fn list_boards(req: HttpRequest<State>) -> impl Responder {
-    req.state()
-        .db
-        .send(ListBoards)
-        .and_then(|res| match res {
-            Ok(user) => Ok(HttpResponse::Ok().json(user)),
-            Err(_) => Ok(HttpResponse::InternalServerError().into()),
-        })
-        .responder()
-}
+#[get("/v1/boards")]
+fn list_boards(conn: DbConn) -> Result<Json<Vec<BoardResponse>>, Status> {
+    use schema::boards;
 
-fn list_threads((board_name, req): (Path<String>, HttpRequest<State>)) -> impl Responder {
-    req.state()
-        .db
-        .send(ListThreads { board_name: board_name.to_string() })
-        .and_then(|res| match res {
-            Ok(threads) => Ok(HttpResponse::Ok().json(threads)),
-            Err(e) => match e.cause().downcast_ref().unwrap() { // Is this unwrap() safe?
-                DieselError::NotFound => Ok(HttpResponse::NotFound().into()),
-                _ => Ok(HttpResponse::InternalServerError().into()),
+    match boards::table
+        .select((
+            boards::columns::name,
+            boards::columns::description,
+        )).get_results(&*conn) {
+            Ok(boards) => {
+                Ok(Json(boards))
             },
-        })
-    .responder()
+            Err(_) => {
+                Err(Status::InternalServerError)
+            },
+    }
 }
 
-fn show_thread(req: HttpRequest<State>) -> impl Responder {
-    "unimplemented"
+#[get("/v1/board/<name>")]
+fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Status> {
+        use schema::boards;
+        use schema::posts;
+
+        // posts::table.inner_join(boards::table).filter(boards::name.eq("diy"))
+
+        match boards::table
+            .left_join(posts::table.on(boards::columns::id.eq(posts::columns::board_id)))
+            .select((
+                posts::columns::post_num.nullable(),
+                posts::columns::reply_to.nullable(),
+                posts::columns::time.nullable(),
+                posts::columns::comment.nullable(),
+            ))
+            .filter(boards::columns::name.eq(&name))
+            .filter(posts::columns::reply_to.is_null())
+            .get_results::<PostResponse>(&*conn)
+            {
+                Ok(threads) => Ok(Json(threads)),
+                Err(_) => Err(Status::NotFound),
+            }
+}
+
+#[get("/v1/board/<name>")]
+fn other_list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Status> {
+        use schema::boards;
+        use schema::posts;
+
+        // posts::table.inner_join(boards::table).filter(boards::name.eq("diy"))
+
+        match posts::table
+            .select((
+                posts::columns::post_num,
+                posts::columns::reply_to,
+                posts::columns::time,
+                posts::columns::comment,
+            ))
+            .inner_join(boards::table.on(posts::columns::board_id.eq(boards::columns::id)))
+            .filter(boards::columns::name.eq(&name))
+            .filter(posts::columns::reply_to.is_null())
+            .get_results::<PostResponse>(&*conn)
+            {
+                Ok(threads) => Ok(Json(threads)),
+                Err(_) => Err(Status::NotFound),
+            }
+
+
+        // let board_id: i32 =
+        //     match boards::table
+        //     .select(boards::columns::id)
+        //     .filter(boards::columns::name.eq(&name))
+        //     .first::<i32>(&*conn) {
+        //         Ok(id) => id,
+        //         Err(_) => return Err(Status::NotFound),
+        //     };
+
+        // match
+        //     posts::table
+        //     .select((
+        //         posts::columns::post_num,
+        //         posts::columns::reply_to,
+        //         posts::columns::time,
+        //         posts::columns::comment,
+        //     ))
+        //     .filter(posts::columns::board_id.eq(board_id))
+        //     .filter(posts::columns::reply_to.is_null())
+        //     .get_results::<PostResponse>(&*conn) {
+        //         Ok(threads) => Ok(Json(threads)),
+        //         Err(_) => Err(Status::NotFound),
+        //     }
+}
+
+#[get("/v1/board/<board>/<id>")]
+fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResponse>>, Status>{
+        use schema::boards;
+        use schema::posts;
+
+        let board_id: i32 =
+            match boards::table
+            .select(boards::columns::id)
+            .filter(boards::columns::name.eq(&board))
+            .first::<i32>(&*conn) {
+                Ok(id) => id,
+                Err(_) => return Err(Status::NotFound),
+            };
+
+        // Get OP followed by replies
+        let post =
+            match
+                posts::table
+                .select((
+                    posts::columns::post_num,
+                    posts::columns::reply_to,
+                    posts::columns::time,
+                    posts::columns::comment,
+                ))
+                .filter(posts::columns::board_id.eq(board_id))
+                .filter(posts::columns::reply_to.is_null())
+                .get_results::<PostResponse>(&*conn) {
+                    Ok(threads) => Ok(Json(threads)),
+                    Err(_) => Err(Status::NotFound),
+                };
+
+        unimplemented!();
+}
+
+fn init_pool(url: &str) -> PgPool {
+    let manager = ConnectionManager::<PgConnection>::new(url);
+    Pool::new(manager).expect("db pool")
 }
 
 fn main() {
-    let manager = ConnectionManager::new("postgresql://127.0.0.1/eggchan");
-    let pool = Pool::new(manager).unwrap();
-
-    let sys = actix::System::new("eggchan");
-    let addr = SyncArbiter::start(3, move || DbExecutor(pool.clone()));
-
-    server::new(move || {
-        App::with_state(State { db: addr.clone() })
-        .resource("/v1/boards", |r| {
-            r.method(http::Method::GET).with(list_boards);
-        })
-        .resource("/v1/board/{name}", |r| {
-            r.method(http::Method::GET).with(list_threads);
-        })
-        // .resource("/v1/{board}", |r| {
-        //     r.method(http::Method::POST).with(make_post);
-        // })
-    })
-    .bind("127.0.0.1:8080")
-    .unwrap()
-    .start();
-
-    let _ = sys.run();
+    rocket::ignite()
+        .mount("/", routes![list_boards, list_threads, show_thread])
+        .manage(init_pool("postgresql://127.0.0.1/eggchan"))
+        .launch();
 }
