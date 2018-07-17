@@ -121,37 +121,33 @@ fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, C
 }
 
 #[get("/v1/board/<board>/<id>")]
-fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResponse>>, Status>{
+fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResponse>>, Custom<&'static str>>{
         use schema::boards;
         use schema::posts;
 
-        let board_id: i32 =
-            match boards::table
-            .select(boards::columns::id)
+        match posts::table
+            .inner_join(boards::table.on(boards::columns::id.eq(posts::columns::board_id)))
+            .select((
+                posts::columns::post_num,
+                posts::columns::reply_to,
+                posts::columns::time,
+                posts::columns::comment,
+            ))
             .filter(boards::columns::name.eq(&board))
-            .first::<i32>(&*conn) {
-                Ok(id) => id,
-                Err(_) => return Err(Status::NotFound),
-            };
-
-        // Get OP followed by replies
-        let post =
-            match
-                posts::table
-                .select((
-                    posts::columns::post_num,
-                    posts::columns::reply_to,
-                    posts::columns::time,
-                    posts::columns::comment,
-                ))
-                .filter(posts::columns::board_id.eq(board_id))
-                .filter(posts::columns::reply_to.is_null())
-                .get_results::<PostResponse>(&*conn) {
-                    Ok(threads) => Ok(Json(threads)),
-                    Err(_) => Err(Status::NotFound),
-                };
-
-        unimplemented!();
+            .filter(posts::columns::post_num.eq(id).or(posts::columns::reply_to.eq(id)))
+            .get_results::<PostResponse>(&*conn) {
+                Ok(posts) => {
+                    match posts.len() {
+                        0 => {
+                            Err(Custom(Status::NotFound, "Thread not found"))
+                        },
+                        _ => {
+                            Ok(Json(posts))
+                        },
+                    }
+                }
+                Err(_) => Err(Custom(Status::InternalServerError, "Internal server error")),
+            }
 }
 
 fn init_pool(url: &str) -> PgPool {
