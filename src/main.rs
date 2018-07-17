@@ -5,6 +5,7 @@ extern crate rocket;
 use rocket::request::{self, FromRequest};
 use rocket::{Request, State, Outcome};
 use rocket::http::Status;
+use rocket::response::status::Custom;
 
 extern crate rocket_contrib;
 use rocket_contrib::Json;
@@ -91,76 +92,32 @@ fn list_boards(conn: DbConn) -> Result<Json<Vec<BoardResponse>>, Status> {
 }
 
 #[get("/v1/board/<name>")]
-fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Status> {
+fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Custom<&'static str>> {
         use schema::boards;
         use schema::posts;
-
-        // posts::table.inner_join(boards::table).filter(boards::name.eq("diy"))
 
         match boards::table
             .left_join(posts::table.on(boards::columns::id.eq(posts::columns::board_id)))
-            .select((
-                posts::columns::post_num.nullable(),
-                posts::columns::reply_to.nullable(),
-                posts::columns::time.nullable(),
-                posts::columns::comment.nullable(),
-            ))
-            .filter(boards::columns::name.eq(&name))
-            .filter(posts::columns::reply_to.is_null())
-            .get_results::<PostResponse>(&*conn)
-            {
-                Ok(threads) => Ok(Json(threads)),
-                Err(_) => Err(Status::NotFound),
-            }
-}
-
-#[get("/v1/board/<name>")]
-fn other_list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Status> {
-        use schema::boards;
-        use schema::posts;
-
-        // posts::table.inner_join(boards::table).filter(boards::name.eq("diy"))
-
-        match posts::table
             .select((
                 posts::columns::post_num,
                 posts::columns::reply_to,
                 posts::columns::time,
                 posts::columns::comment,
-            ))
-            .inner_join(boards::table.on(posts::columns::board_id.eq(boards::columns::id)))
+            ).nullable())
             .filter(boards::columns::name.eq(&name))
             .filter(posts::columns::reply_to.is_null())
-            .get_results::<PostResponse>(&*conn)
+            .get_results::<Option<PostResponse>>(&*conn)
             {
-                Ok(threads) => Ok(Json(threads)),
-                Err(_) => Err(Status::NotFound),
+                Ok(maybe_threads) => {
+                    if let None = &maybe_threads.get(0) {
+                        return Err(Custom(Status::NotFound, "Board not found"));
+                    }
+
+                    let threads = maybe_threads.into_iter().filter_map(|t| t).collect();
+                    return Ok(Json(threads));
+                },
+                Err(_) => Err(Custom(Status::InternalServerError, "Internal server error")),
             }
-
-
-        // let board_id: i32 =
-        //     match boards::table
-        //     .select(boards::columns::id)
-        //     .filter(boards::columns::name.eq(&name))
-        //     .first::<i32>(&*conn) {
-        //         Ok(id) => id,
-        //         Err(_) => return Err(Status::NotFound),
-        //     };
-
-        // match
-        //     posts::table
-        //     .select((
-        //         posts::columns::post_num,
-        //         posts::columns::reply_to,
-        //         posts::columns::time,
-        //         posts::columns::comment,
-        //     ))
-        //     .filter(posts::columns::board_id.eq(board_id))
-        //     .filter(posts::columns::reply_to.is_null())
-        //     .get_results::<PostResponse>(&*conn) {
-        //         Ok(threads) => Ok(Json(threads)),
-        //         Err(_) => Err(Status::NotFound),
-        //     }
 }
 
 #[get("/v1/board/<board>/<id>")]
