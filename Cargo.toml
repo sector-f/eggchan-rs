@@ -28,3 +28,5 @@ prettytable-rs = "0.7.0"
 rocket = "0.3.14"
 rocket_codegen = "0.3.14"
 rocket_contrib = "0.3.14"
+
+multipart = "0.15.0"
