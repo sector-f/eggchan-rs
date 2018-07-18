@@ -48,13 +48,9 @@ use std::process::exit;
 use std::io::Read;
 use std::ops::Deref;
 
-// pub mod db;
-// use db::*;
 pub mod models;
 pub mod responses;
 use responses::*;
-// pub mod messages;
-// use messages::*;
 pub mod schema;
 
 type PgPool = Pool<ConnectionManager<PgConnection>>;
