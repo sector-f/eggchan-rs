@@ -44,7 +44,7 @@ use futures::future::Future;
 
 // use std::path::PathBuf;
 use std::process::exit;
-
+use std::convert::From;
 use std::io::Read;
 use std::ops::Deref;
 
@@ -74,6 +74,21 @@ impl Deref for DbConn {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Serialize)]
+struct ApiError {
+    code: u16,
+    message: String,
+}
+
+impl<'a> From<Custom<&'a str>> for ApiError {
+    fn from(custom: Custom<&'a str>) -> ApiError {
+        ApiError {
+            code: custom.0.code,
+            message: custom.1.to_string(),
+        }
     }
 }
 
@@ -168,6 +183,8 @@ fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentT
         )
     )?;
 
+    let mut comment_text = String::new();
+
     let mut multipart = Multipart::with_body(data.open(), boundary);
     let multipart_result = multipart.foreach_entry(|field| {
         let is_text = &field.is_text();
@@ -178,36 +195,43 @@ fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentT
                 if ! is_text {
                     return;
                 }
+
+                let mut data = field.data;
+                let _ = data.read_to_string(&mut comment_text);
             },
             _ => {
                 return;
             },
         }
 
-        let mut data = field.data;
-        let mut buf = Vec::new();
-        let _ = data.read_to_end(&mut buf);
-        let string = String::from_utf8_lossy(&buf);
-
-        let id =
-            boards::table
-            .select(boards::columns::id)
-            .filter(boards::columns::name.eq(&board))
-            .first::<i32>(&*conn);
-
-        if let Ok(id) = id {
-            insert_into(posts).values((
-                posts::columns::board_id.eq(id),
-                posts::columns::comment.eq(string),
-            )).execute(&*conn);
-        }
     });
 
     if let Err(_) = multipart_result {
         return Err(Custom(
             Status::BadRequest,
-            "Could not parse multipart data".into()
+            "Could not parse multipart data",
         ));
+    }
+
+    if comment_text.is_empty() {
+        return Err(Custom(Status::BadRequest, "Comment must be non-empty UTF8"));
+    }
+
+    let id = match boards::table
+        .select(boards::columns::id)
+        .filter(boards::columns::name.eq(&board))
+        .first::<i32>(&*conn) {
+            Ok(id) => id,
+            Err(_) => {
+                return Err(Custom(Status::Forbidden, "Board does not exist"));
+            },
+        };
+
+    if let Err(_) = insert_into(posts).values((
+        posts::columns::board_id.eq(id),
+        posts::columns::comment.eq(&comment_text),
+    )).execute(&*conn) {
+        return Err(Custom(Status::InternalServerError, "Internal server error"));
     }
 
     Ok("upload complete")
@@ -227,6 +251,8 @@ fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_t
         )
     )?;
 
+    let mut comment_text = String::new();
+
     let mut multipart = Multipart::with_body(data.open(), boundary);
     let multipart_result = multipart.foreach_entry(|field| {
         let is_text = &field.is_text();
@@ -237,37 +263,60 @@ fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_t
                 if ! is_text {
                     return;
                 }
+
+                let mut data = field.data;
+                let _ = data.read_to_string(&mut comment_text);
             },
             _ => {
                 return;
             },
         }
 
-        let mut data = field.data;
-        let mut buf = Vec::new();
-        let _ = data.read_to_end(&mut buf);
-        let string = String::from_utf8_lossy(&buf);
-
-        let id =
-            boards::table
-            .select(boards::columns::id)
-            .filter(boards::columns::name.eq(&board))
-            .first::<i32>(&*conn);
-
-        if let Ok(id) = id {
-            insert_into(posts).values((
-                posts::columns::board_id.eq(id),
-                posts::columns::reply_to.eq(thread),
-                posts::columns::comment.eq(string),
-            )).execute(&*conn);
-        }
     });
 
     if let Err(_) = multipart_result {
         return Err(Custom(
             Status::BadRequest,
-            "Could not parse multipart data".into()
+            "Could not parse multipart data",
         ));
+    }
+
+    if comment_text.is_empty() {
+        return Err(Custom(Status::BadRequest, "Comment must be non-empty UTF8"));
+    }
+
+    let id = match boards::table
+        .select(boards::columns::id)
+        .filter(boards::columns::name.eq(&board))
+        .first::<i32>(&*conn) {
+            Ok(id) => id,
+            Err(_) => {
+                return Err(Custom(Status::Forbidden, "Board does not exist"));
+            },
+        };
+
+    // Make sure the post we're replying to is an OP
+    match posts::table
+        .select(posts::columns::post_num)
+        .filter(posts::columns::post_num.eq(thread))
+        .filter(posts::columns::reply_to.is_null())
+        .get_results::<i32>(&*conn) {
+            Ok(results) => {
+                if results.len() == 0 {
+                    return Err(Custom(Status::Forbidden, "Replies must be to the first post in a thread"));
+                }
+            },
+            Err(_) => {
+                return Err(Custom(Status::InternalServerError, "Internal server error"));
+            }
+        }
+
+    if let Err(_) = insert_into(posts).values((
+        posts::columns::board_id.eq(id),
+        posts::columns::reply_to.eq(thread),
+        posts::columns::comment.eq(&comment_text),
+    )).execute(&*conn) {
+        return Err(Custom(Status::InternalServerError, "Internal server error"));
     }
 
     Ok("upload complete")
