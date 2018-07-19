@@ -8,8 +8,8 @@ It returns information about boards and threads in a JSON format, allowing diffe
 - [ ] Implement board categories
 - [ ] Implement image uploads
 - [ ] Add optional Name field to posts
-- [ ] Make sure an error is returned if you try to reply to a post that isn't an OP (i.e. if posts.reply_to IS NOT NULL then error)
-- [ ] Maybe write a SQL script to fill up an empty DB with some fixed test data
+- [x] Make sure an error is returned if you try to reply to a post that isn't an OP (i.e. if posts.reply_to IS NOT NULL then error)
+- [x] Maybe write a SQL script to fill up an empty DB with some fixed test data
 - [ ] Change all returned error messages to JSON
 - [ ] Implement API users
 - [ ] Create CLI program to query the board's database
