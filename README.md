@@ -5,7 +5,7 @@ It returns information about boards and threads in a JSON format, allowing diffe
 
 ## To-Do
 
-- [ ] Implement board categories
+- [x] Implement board categories
 - [ ] Implement image uploads
 - [ ] Add optional Name field to posts
 - [x] Make sure an error is returned if you try to reply to a post that isn't an OP (i.e. if posts.reply_to IS NOT NULL then error)
@@ -25,3 +25,5 @@ It returns information about boards and threads in a JSON format, allowing diffe
 - [x] Create a new thread on a given board
 - [x] Reply to a given thread
 - [ ] Add API user
+- [ ] List categories
+- [ ] List all boards in a given category
