@@ -19,6 +19,12 @@ pub struct PostResponse {
 }
 
 #[derive(Queryable, Serialize)]
+pub struct PostCreatedResponse {
+    pub board: String,
+    pub post_num: i32,
+}
+
+#[derive(Queryable, Serialize)]
 pub struct ImageResponse {
     filepath: String,
 }

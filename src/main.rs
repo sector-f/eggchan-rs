@@ -144,6 +144,17 @@ fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResp
     use schema::boards;
     use schema::posts;
 
+    // Prevent individual posts from being listed
+    // Maybe this should be allowed though?
+    if let Ok(posts) =
+        posts::table
+        .select(posts::columns::post_num)
+        .filter(posts::columns::post_num.eq(id))
+        .filter(posts::columns::reply_to.is_not_null())
+        .first::<i32>(&*conn) {
+            return Err(Custom(Status::NotFound, "Thread not found"));
+        }
+
     match posts::table
         .inner_join(boards::table.on(boards::columns::id.eq(posts::columns::board_id)))
         .select((
@@ -170,11 +181,12 @@ fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResp
 }
 
 #[post("/board/<board>", format="multipart/form-data", data="<data>")]
-fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentType) -> Result<&'a str, Custom<&'static str>> {
+fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentType) -> Result<Json<PostCreatedResponse>, Custom<&'static str>> {
     use schema::boards;
     use schema::posts;
     use schema::posts::dsl::*;
     use diesel::insert_into;
+    use models::Post;
 
     let (_, boundary) = cont_type.params().find(|&(k, _)| k == "boundary").ok_or_else(
         || Custom(
@@ -227,22 +239,26 @@ fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentT
             },
         };
 
-    if let Err(_) = insert_into(posts).values((
+    match insert_into(posts).values((
         posts::columns::board_id.eq(id),
         posts::columns::comment.eq(&comment_text),
-    )).execute(&*conn) {
-        return Err(Custom(Status::InternalServerError, "Internal server error"));
+    )).get_result::<Post>(&*conn) {
+        Ok(post) => {
+            Ok(Json(PostCreatedResponse { board: board, post_num: post.post_num }))
+        },
+        Err(_) => {
+            Err(Custom(Status::InternalServerError, "Internal server error"))
+        },
     }
-
-    Ok("upload complete")
 }
 
 #[post("/board/<board>/<thread>", format="multipart/form-data", data="<data>")]
-fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_type: &ContentType) -> Result<&'a str, Custom<&'static str>> {
+fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_type: &ContentType) -> Result<Json<PostCreatedResponse>, Custom<&'static str>> {
     use schema::boards;
     use schema::posts;
     use schema::posts::dsl::*;
     use diesel::insert_into;
+    use models::Post;
 
     let (_, boundary) = cont_type.params().find(|&(k, _)| k == "boundary").ok_or_else(
         || Custom(
@@ -311,15 +327,18 @@ fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_t
             }
         }
 
-    if let Err(_) = insert_into(posts).values((
+    match insert_into(posts).values((
         posts::columns::board_id.eq(id),
         posts::columns::reply_to.eq(thread),
         posts::columns::comment.eq(&comment_text),
-    )).execute(&*conn) {
-        return Err(Custom(Status::InternalServerError, "Internal server error"));
+    )).get_result::<Post>(&*conn) {
+        Ok(post) => {
+            Ok(Json(PostCreatedResponse { board: board, post_num: post.post_num }))
+        },
+        Err(_) => {
+            Err(Custom(Status::InternalServerError, "Internal server error"))
+        },
     }
-
-    Ok("upload complete")
 }
 
 fn init_pool(url: &str) -> PgPool {
