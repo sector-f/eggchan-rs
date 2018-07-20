@@ -2,10 +2,18 @@ use chrono::prelude::*;
 use schema::*;
 
 #[derive(Queryable, Insertable)]
+#[table_name = "categories"]
+pub struct Category {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Queryable, Insertable)]
 pub struct Board {
     pub id: i32,
     pub name: String,
     pub description: Option<String>,
+    pub category: Option<i32>
 }
 
 #[derive(Queryable, Insertable)]

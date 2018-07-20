@@ -1,4 +1,4 @@
-#![feature(plugin)]
+#![feature(plugin, custom_attribute)]
 #![plugin(rocket_codegen)]
 
 extern crate rocket;
@@ -95,12 +95,14 @@ impl<'a> From<Custom<&'a str>> for ApiError {
 #[get("/boards")]
 fn list_boards(conn: DbConn) -> Result<Json<Vec<BoardResponse>>, Status> {
     use schema::boards;
+    use schema::categories;
 
-    match boards::table
+    match boards::table.left_join(categories::table)
         .select((
             boards::columns::name,
             boards::columns::description,
-        )).get_results(&*conn) {
+            categories::columns::name.nullable(),
+        )).get_results::<BoardResponse>(&*conn) {
             Ok(boards) => {
                 Ok(Json(boards))
             },

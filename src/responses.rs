@@ -5,6 +5,8 @@ pub struct BoardResponse {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    category: Option<String>,
 }
 
 #[derive(Queryable, Serialize)]

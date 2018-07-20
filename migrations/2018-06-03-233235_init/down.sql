@@ -7,3 +7,4 @@ DROP TABLE posts;
 DROP TABLE images;
 DROP TABLE board_postnum;
 DROP TABLE boards;
+DROP TABLE categories;

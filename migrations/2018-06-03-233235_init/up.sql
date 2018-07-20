@@ -1,9 +1,15 @@
 -- Your SQL goes here
 
+CREATE TABLE IF NOT EXISTS categories (
+	id SERIAL PRIMARY KEY,
+	name TEXT UNIQUE NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS boards (
 	id SERIAL PRIMARY KEY,
 	name TEXT UNIQUE NOT NULL,
-	description TEXT
+	description TEXT,
+	category INTEGER REFERENCES categories
 );
 
 CREATE TABLE IF NOT EXISTS board_postnum (

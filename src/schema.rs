@@ -10,6 +10,14 @@ table! {
         id -> Int4,
         name -> Text,
         description -> Nullable<Text>,
+        category -> Nullable<Int4>,
+    }
+}
+
+table! {
+    categories (id) {
+        id -> Int4,
+        name -> Text,
     }
 }
 
@@ -33,12 +41,14 @@ table! {
 }
 
 joinable!(board_postnum -> boards (board_id));
+joinable!(boards -> categories (category));
 joinable!(posts -> boards (board_id));
 joinable!(posts -> images (image));
 
 allow_tables_to_appear_in_same_query!(
     board_postnum,
     boards,
+    categories,
     images,
     posts,
 );
