@@ -25,5 +25,5 @@ It returns information about boards and threads in a JSON format, allowing diffe
 - [x] Create a new thread on a given board
 - [x] Reply to a given thread
 - [ ] Add API user
-- [ ] List categories
-- [ ] List all boards in a given category
+- [x] List categories
+- [x] List all boards in a given category

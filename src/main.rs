@@ -92,24 +92,47 @@ impl<'a> From<Custom<&'a str>> for ApiError {
     }
 }
 
+#[get("/categories")]
+fn list_categories(conn: DbConn) -> Result<Json<Vec<CategoryResponse>>, Status> {
+    use schema::categories;
+
+    categories::table
+        .select((categories::columns::name,))
+        .get_results::<CategoryResponse>(&*conn)
+        .map(Json)
+        .map_err(|_| Status::InternalServerError)
+}
+
+#[get("/categories/<category>")]
+fn show_category(conn: DbConn, category: String) -> Result<Json<Vec<BoardResponse>>, Status> {
+    use schema::categories;
+    use schema::boards;
+
+    boards::table.left_join(categories::table)
+        .select((
+            boards::columns::name,
+            boards::columns::description,
+            categories::columns::name.nullable(),
+        ))
+        .filter(categories::columns::name.eq(&category))
+        .get_results::<BoardResponse>(&*conn)
+        .map(Json)
+        .map_err(|_| Status::InternalServerError)
+}
+
 #[get("/boards")]
 fn list_boards(conn: DbConn) -> Result<Json<Vec<BoardResponse>>, Status> {
     use schema::boards;
     use schema::categories;
 
-    match boards::table.left_join(categories::table)
+    boards::table.left_join(categories::table)
         .select((
             boards::columns::name,
             boards::columns::description,
             categories::columns::name.nullable(),
-        )).get_results::<BoardResponse>(&*conn) {
-            Ok(boards) => {
-                Ok(Json(boards))
-            },
-            Err(_) => {
-                Err(Status::InternalServerError)
-            },
-    }
+        )).get_results::<BoardResponse>(&*conn)
+        .map(Json)
+        .map_err(|_| Status::InternalServerError)
 }
 
 #[get("/board/<name>")]
@@ -350,7 +373,7 @@ fn init_pool(url: &str) -> PgPool {
 
 fn main() {
     rocket::ignite()
-        .mount("/", routes![list_boards, list_threads, show_thread, post_thread, post_comment])
+        .mount("/", routes![list_categories, show_category, list_boards, list_threads, show_thread, post_thread, post_comment])
         .manage(init_pool("postgresql://127.0.0.1/eggchan"))
         .launch();
 }

@@ -30,3 +30,8 @@ pub struct PostCreatedResponse {
 pub struct ImageResponse {
     filepath: String,
 }
+
+#[derive(Queryable, Serialize)]
+pub struct CategoryResponse {
+    pub name: String,
+}
