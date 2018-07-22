@@ -171,13 +171,16 @@ fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResp
 
     // Prevent individual posts from being listed
     // Maybe this should be allowed though?
+
     if let Ok(posts) =
         posts::table
+        .inner_join(boards::table)
         .select(posts::columns::post_num)
         .filter(posts::columns::post_num.eq(id))
         .filter(posts::columns::reply_to.is_not_null())
+        .filter(boards::columns::name.eq(&board))
         .first::<i32>(&*conn) {
-            return Err(Custom(Status::NotFound, "Thread not found"));
+            return Err(Custom(Status::NotFound, "Thread not found!!"));
         }
 
     match posts::table
