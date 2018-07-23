@@ -135,7 +135,7 @@ fn list_boards(conn: DbConn) -> Result<Json<Vec<BoardResponse>>, Status> {
         .map_err(|_| Status::InternalServerError)
 }
 
-#[get("/board/<name>")]
+#[get("/boards/<name>")]
 fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, Custom<&'static str>> {
     use schema::boards;
     use schema::posts;
@@ -164,7 +164,7 @@ fn list_threads(conn: DbConn, name: String) -> Result<Json<Vec<PostResponse>>, C
         }
 }
 
-#[get("/board/<board>/<id>")]
+#[get("/boards/<board>/<id>")]
 fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResponse>>, Custom<&'static str>>{
     use schema::boards;
     use schema::posts;
@@ -208,7 +208,7 @@ fn show_thread(conn: DbConn, board: String, id: i32) -> Result<Json<Vec<PostResp
         }
 }
 
-#[post("/board/<board>", format="multipart/form-data", data="<data>")]
+#[post("/boards/<board>", format="multipart/form-data", data="<data>")]
 fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentType) -> Result<Json<PostCreatedResponse>, Custom<&'static str>> {
     use schema::boards;
     use schema::posts;
@@ -280,7 +280,7 @@ fn post_thread<'a>(conn: DbConn, board: String, data: Data, cont_type: &ContentT
     }
 }
 
-#[post("/board/<board>/<thread>", format="multipart/form-data", data="<data>")]
+#[post("/boards/<board>/<thread>", format="multipart/form-data", data="<data>")]
 fn post_comment<'a>(conn: DbConn, board: String, thread: i32, data: Data, cont_type: &ContentType) -> Result<Json<PostCreatedResponse>, Custom<&'static str>> {
     use schema::boards;
     use schema::posts;
